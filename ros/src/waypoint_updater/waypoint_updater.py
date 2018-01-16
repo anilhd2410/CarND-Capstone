@@ -3,8 +3,10 @@
 import rospy
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
+from std_msgs.msg import Int32
 
 import math
+import tf
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
@@ -22,6 +24,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
+#MAX_SPEED = 10 * 0.44704 # 1 mph = 0.44704 m/s, for site testing
 
 
 class WaypointUpdater(object):
@@ -32,25 +35,29 @@ class WaypointUpdater(object):
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
-
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('/obstacle_waypoint', Lane, self.obstacle_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
+        self.current_pose = None
+        self.waypoints = None
+        self.traffic_light_wp = None       
+        self.publish()
 
         rospy.spin()
 
     def pose_cb(self, msg):
-        # TODO: Implement
-        pass
+        self.current_pose = msg.pose
+        if self.waypoints is not None:
+            self.publish()
 
     def waypoints_cb(self, waypoints):
-        # TODO: Implement
-        pass
+        self.waypoints = waypoints.waypoints
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
-        pass
+        self.traffic_light_wp = msg.data
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -69,7 +76,42 @@ class WaypointUpdater(object):
             dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
             wp1 = i
         return dist
+    
+    def get_closest_waypoint(self, pose, waypoints):
+        closest_dist = float('inf')
+        closest_wp = 0
+        dl = lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2)
+        for idx, wp in enumerate(waypoints):
+            dist = dl(pose.position, wp.pose.pose.position)
+            if (dist < closest_dist):
+                closest_dist = dist
+                closest_wp = idx
+                  
+        return closest_wp
+    
+    def get_next_waypoint(self, pose, waypoints):
+        closest_wp = self.get_closest_waypoint(pose, waypoints)
+        wp_x = waypoints[closest_wp].pose.pose.position.x
+        wp_y = waypoints[closest_wp].pose.pose.position.y
+        heading = math.atan2((wp_y - pose.position.y), (wp_x - pose.position.x))
+        quaternion = (pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w)
+        _, _, yaw = tf.transformations.euler_from_quaternion(quaternion)
+        angle = math.fabs(yaw - heading)
 
+        if angle > (math.pi / 4.0):        
+            closest_wp += 1
+        
+        return closest_wp
+    
+    def publish(self):
+        if self.current_pose is not None:
+            next_wp = self.get_next_waypoint(self.current_pose, self.waypoints)
+            further_wps = self.waypoints[next_wp:next_wp+LOOKAHEAD_WPS]
+        
+            lane = Lane()
+            lane.header.frame_id = '/world'
+            lane.waypoints = further_wps
+            self.final_waypoints_pub.publish(lane)
 
 if __name__ == '__main__':
     try:
