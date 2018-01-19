@@ -26,6 +26,7 @@ class TLDetector(object):
         self.lights = []
         self.stop_line_indices = []
         self.car_current_waypoint = None
+        self.unknown_count = 0
 
         config_string = rospy.get_param("/traffic_light_config")
         self.config = yaml.load(config_string)
@@ -40,7 +41,6 @@ class TLDetector(object):
 
         # ROS publishers
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
-        self.log_pub = rospy.Publisher('/vehicle/visible_light_idx', Int32, queue_size=1)
 
         # ROS subscribers
         sub1 = rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb, queue_size=1)
@@ -91,22 +91,25 @@ class TLDetector(object):
         """
         self.has_image = True
         self.camera_image = msg
-        light_wp, state = self.process_traffic_lights()
+	light_wp, state = self.process_traffic_lights()
+        if state == TrafficLight.UNKNOWN:
+            self.unknown_count = self.unknown_count + 1
+            if (self.unknown_count <= STATE_COUNT_THRESHOLD):
+                return
+        else:
+            self.unknown_count = 0
         
-        # stop at yellow lights as well as red lights
+        # treat yellow as red for stopping purposes
         if state == TrafficLight.YELLOW:
             state = TrafficLight.RED
 
-        # Publish upcoming red lights at camera frequency.
-        # Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
-        # of times till we start using it.
-        # Otherwise the previous stable state is used.
         if self.state != state:
             self.state_count = 0
             self.state = state
         elif self.state_count >= STATE_COUNT_THRESHOLD:
             self.last_state = self.state
-            light_wp = light_wp if state == TrafficLight.RED else -1
+            if state not in [TrafficLight.RED, TrafficLight.YELLOW]:
+                light_wp = -1
             self.last_wp = light_wp
             self.upcoming_red_light_pub.publish(Int32(light_wp))
         else:
@@ -174,10 +177,6 @@ class TLDetector(object):
         # If waypoint has been found get traffic light state
         if min_dist < max_dist_tl:
             state = self.get_light_state(light_idx)
-
-            # DEBUG
-	    self.log_pub.publish(state)
-            #rospy.loginfo("Traffic light detected, waypoint number: {}".format(light_wp_idx))
             
             return light_wp_idx, state
 
