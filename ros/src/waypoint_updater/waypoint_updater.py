@@ -10,16 +10,12 @@ import tf
 
 '''
 This node will publish waypoints from the car's current position to some `x` distance ahead.
-
 As mentioned in the doc, you should ideally first implement a version which does not care
 about traffic lights or obstacles.
-
 Once you have created dbw_node, you will update this node to use the status of traffic lights too.
-
 Please note that our simulator also provides the exact location of traffic lights and their
 current status in `/vehicle/traffic_lights` message. You can use this message to build this node
 as well as to verify your TL classifier.
-
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
@@ -44,20 +40,24 @@ class WaypointUpdater(object):
         self.current_pose = None
         self.waypoints = None
         self.traffic_light_wp = None       
-        self.publish()
+        #self.publish()
 
         rospy.spin()
 
     def pose_cb(self, msg):
-        self.current_pose = msg.pose
-        if self.waypoints is not None:
+        self.current_pose = msg
+        if self.current_pose is not None:
             self.publish()
 
-    def waypoints_cb(self, waypoints):
-        self.waypoints = waypoints.waypoints
+    def waypoints_cb(self, msg):
+	if self.waypoints is None:
+	    self.waypoints = msg
 
     def traffic_cb(self, msg):
         self.traffic_light_wp = msg.data
+	rospy.loginfo("Traffic light detected: " + str(msg.data))
+	if self.traffic_light_wp > -1:
+	    self.publish()
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -76,7 +76,25 @@ class WaypointUpdater(object):
             dist += dl(waypoints[wp1].pose.pose.position, waypoints[i].pose.pose.position)
             wp1 = i
         return dist
-    
+		
+    def distance(self, p1, p2):
+        x = p1.x - p2.x
+        y = p1.y - p2.y
+        z = p1.z - p2.z
+        return math.sqrt(x*x + y*y + z*z)	
+		
+    def decelerate(self, waypoints, tl_wp):
+        last = waypoints[tl_wp]
+        last.twist.twist.linear.x = 0.0
+        for wp in waypoints[:tl_wp][::-1]:
+            dist = self.distance(wp.pose.pose.position, last.pose.pose.position)
+            dist = max(0.0, dist - 0.5)
+            vel  = math.sqrt(2 * self.decel * dist)
+            if vel < 1.0:
+                vel = 0.0
+            wp.twist.twist.linear.x = min(vel, wp.twist.twist.linear.x)
+        return waypoints	
+		   
     def get_closest_waypoint(self, pose, waypoints):
         closest_dist = float('inf')
         closest_wp = 0
@@ -102,15 +120,67 @@ class WaypointUpdater(object):
             closest_wp += 1
         
         return closest_wp
+		
+    def compute_final_waypoints(self, waypoints, first_wp, last_wp):
+        final_wpts = []
+	traffic_light = True
+		
+	if self.traffic_light_wp is None or self.traffic_light_wp < 0:
+	    traffic_light = False
+		
+		
+        for i in range(first_wp, last_wp):
+            index = i % len(waypoints)
+            wp = Waypoint()
+            wp.pose.pose.position.x  = waypoints[index].pose.pose.position.x
+            wp.pose.pose.position.y  = waypoints[index].pose.pose.position.y
+            wp.pose.pose.position.z  = waypoints[index].pose.pose.position.z
+            wp.pose.pose.orientation = waypoints[index].pose.pose.orientation
+
+            if traffic_light:
+	        wp.twist.twist.linear.x = min(self.current_velocity, waypoints[index].twist.twist.linear.x)
+	    else:
+                wp.twist.twist.linear.x = waypoints[index].twist.twist.linear.x 
+            final_wpts.append(wp)
+
+        if traffic_light:
+            tl_wp = len(final_wpts)
+
+            for i in range(last_wp, first_wp + LOOKAHEAD_WPS):
+                index = i % len(waypoints)
+                wp = Waypoint()
+                wp.pose.pose.position.x  = waypoints[index].pose.pose.position.x
+                wp.pose.pose.position.y  = waypoints[index].pose.pose.position.y
+                wp.pose.pose.position.z  = waypoints[index].pose.pose.position.z
+                wp.pose.pose.orientation = waypoints[index].pose.pose.orientation
+                wp.twist.twist.linear.x  = 0.0
+                final_wpts.append(wp)
+				
+            final_wpts = self.decelerate(final_wpts, tl_wp)
+
+        return final_wpts
     
     def publish(self):
         if self.current_pose is not None:
-            next_wp = self.get_next_waypoint(self.current_pose, self.waypoints)
-            further_wps = self.waypoints[next_wp:next_wp+LOOKAHEAD_WPS]
-        
-            lane = Lane()
+	    pose = self.current_pose
+	    wpts = self.waypoints.waypoints
+	    traffic_wpts = self.traffic_light_wp
+	    lane = Lane()
             lane.header.frame_id = '/world'
-            lane.waypoints = further_wps
+			
+            next_wp = self.get_next_waypoint(self.current_pose.pose, self.waypoints.waypoints)
+            
+	    #further_wps = self.waypoints[next_wp:next_wp+LOOKAHEAD_WPS]
+
+	    #traffic_light_wp_index = max(0, traffic_wpts - next_wp)
+				
+            # Brake if a red light is detected
+            if self.traffic_light_wp is None or self.traffic_light_wp < 0:
+                lane.waypoints = self.compute_final_waypoints(wpts, next_wp, next_wp+LOOKAHEAD_WPS)
+            else:
+                lane.waypoints = self.compute_final_waypoints(wpts, next_wp, traffic_wpts)
+			
+
             self.final_waypoints_pub.publish(lane)
 
 if __name__ == '__main__':
