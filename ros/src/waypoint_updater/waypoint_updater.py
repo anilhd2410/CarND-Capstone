@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from styx_msgs.msg import Lane, Waypoint
 from std_msgs.msg import Int32
 
@@ -21,6 +21,10 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 #MAX_SPEED = 10 * 0.44704 # 1 mph = 0.44704 m/s, for site testing
+MAX_DEACCELERATION = 1.0
+STOP_DISTANCE = 5.0
+
+
 
 
 class WaypointUpdater(object):
@@ -32,14 +36,16 @@ class WaypointUpdater(object):
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
         rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
-        rospy.Subscriber('/obstacle_waypoint', Lane, self.obstacle_cb)
+        #rospy.Subscriber('/obstacle_waypoint', Lane, self.obstacle_cb)
+        rospy.Subscriber('/current_velocity', TwistStamped, self.current_vel_cb)
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         # TODO: Add other member variables you need below
         self.current_pose = None
         self.waypoints = None
-        self.traffic_light_wp = None       
+        self.traffic_light_wp = None  
+        self.current_velocity = 0     
         #self.publish()
 
         rospy.spin()
@@ -50,18 +56,21 @@ class WaypointUpdater(object):
             self.publish()
 
     def waypoints_cb(self, msg):
-	if self.waypoints is None:
-	    self.waypoints = msg
+        if self.waypoints is None:
+            self.waypoints = msg
 
     def traffic_cb(self, msg):
         self.traffic_light_wp = msg.data
-	rospy.loginfo("Traffic light detected: " + str(msg.data))
-	if self.traffic_light_wp > -1:
-	    self.publish()
+        rospy.loginfo("Traffic light detected: " + str(msg.data))
+        if self.traffic_light_wp > -1:
+            self.publish()
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
         pass
+        
+    def current_vel_cb(self, msg):
+        current_velocity = msg.twist.linear.x
 
     def get_waypoint_velocity(self, waypoint):
         return waypoint.twist.twist.linear.x
@@ -88,8 +97,8 @@ class WaypointUpdater(object):
         last.twist.twist.linear.x = 0.0
         for wp in waypoints[:tl_wp][::-1]:
             dist = self.distance(wp.pose.pose.position, last.pose.pose.position)
-            dist = max(0.0, dist - 0.5)
-            vel  = math.sqrt(2 * self.decel * dist)
+            dist = max(0.0, dist - STOP_DISTANCE)
+            vel  = math.sqrt(2 * MAX_DEACCELERATION* dist)
             if vel < 1.0:
                 vel = 0.0
             wp.twist.twist.linear.x = min(vel, wp.twist.twist.linear.x)
@@ -123,10 +132,10 @@ class WaypointUpdater(object):
 		
     def compute_final_waypoints(self, waypoints, first_wp, last_wp):
         final_wpts = []
-	traffic_light = True
+        traffic_light = True
 		
-	if self.traffic_light_wp is None or self.traffic_light_wp < 0:
-	    traffic_light = False
+        if self.traffic_light_wp is None or self.traffic_light_wp < 0:
+            traffic_light = False
 		
 		
         for i in range(first_wp, last_wp):
@@ -138,13 +147,21 @@ class WaypointUpdater(object):
             wp.pose.pose.orientation = waypoints[index].pose.pose.orientation
 
             if traffic_light:
-	        wp.twist.twist.linear.x = min(self.current_velocity, waypoints[index].twist.twist.linear.x)
-	    else:
+                # stop close to red light 
+                distance = self.distance(wp.pose.pose.position, waypoints   [end_wp].pose.pose.position)
+                if self.current_velocity < 1.0 and distance < STOP_DISTANCE:
+                    wp.twist.twist.linear.x = 0.0
+                elif self.current_velocity < 1.0 and distance > STOP_DISTANCE:
+                    wp.twist.twist.linear.x = 2.0
+                else:
+                    wp.twist.twist.linear.x = min(self.current_velocity, waypoints[index].twist.twist.linear.x)
+            else:
                 wp.twist.twist.linear.x = waypoints[index].twist.twist.linear.x 
+
             final_wpts.append(wp)
 
         if traffic_light:
-            tl_wp = len(final_wpts)
+            trafficlight_wp = len(final_wpts)
 
             for i in range(last_wp, first_wp + LOOKAHEAD_WPS):
                 index = i % len(waypoints)
@@ -156,31 +173,33 @@ class WaypointUpdater(object):
                 wp.twist.twist.linear.x  = 0.0
                 final_wpts.append(wp)
 				
-            final_wpts = self.decelerate(final_wpts, tl_wp)
+            final_wpts = self.decelerate(final_wpts, trafficlight_wp)
 
         return final_wpts
     
     def publish(self):
         if self.current_pose is not None:
-	    pose = self.current_pose
-	    wpts = self.waypoints.waypoints
-	    traffic_wpts = self.traffic_light_wp
-	    lane = Lane()
+            pose = self.current_pose
+            wpts = self.waypoints.waypoints
+            traffic_wpts = self.traffic_light_wp
+            lane = Lane()
             lane.header.frame_id = '/world'
 			
-            next_wp = self.get_next_waypoint(self.current_pose.pose, self.waypoints.waypoints)
+            next_wp = self.get_next_waypoint(pose.pose, wpts)
             
-	    #further_wps = self.waypoints[next_wp:next_wp+LOOKAHEAD_WPS]
+            #further_wps = self.waypoints.waypoints[next_wp:next_wp+LOOKAHEAD_WPS]
+            #lane.waypoints = further_wps
 
 	    #traffic_light_wp_index = max(0, traffic_wpts - next_wp)
 				
-            # Brake if a red light is detected
+        # Brake if a red light is detected
             if self.traffic_light_wp is None or self.traffic_light_wp < 0:
+                rospy.loginfo("traffic_light_wp < 0 ")
                 lane.waypoints = self.compute_final_waypoints(wpts, next_wp, next_wp+LOOKAHEAD_WPS)
             else:
+                rospy.loginfo("traffic_light_wp > 0")
                 lane.waypoints = self.compute_final_waypoints(wpts, next_wp, traffic_wpts)
 			
-
             self.final_waypoints_pub.publish(lane)
 
 if __name__ == '__main__':
