@@ -21,11 +21,8 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 #MAX_SPEED = 10 * 0.44704 # 1 mph = 0.44704 m/s, for site testing
-MAX_DEACCELERATION = 1.0
+MAX_DEACCELERATION = 0.1
 STOP_DISTANCE = 5.0
-
-
-
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -41,29 +38,33 @@ class WaypointUpdater(object):
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
-        # TODO: Add other member variables you need below
+        #Add other member variables you need below
         self.current_pose = None
         self.waypoints = None
         self.traffic_light_wp = None  
-        self.current_velocity = 0     
-        #self.publish()
+        self.current_velocity = 0 
+         
+        #rospy.spin()
+        rate = rospy.Rate(20)
+        while not rospy.is_shutdown():
+            self.publish()
+            rate.sleep()
 
-        rospy.spin()
 
     def pose_cb(self, msg):
         self.current_pose = msg
-        if self.current_pose is not None:
-            self.publish()
+        #if self.current_pose is not None:
+            #self.publish()
 
     def waypoints_cb(self, msg):
-        if self.waypoints is None:
-            self.waypoints = msg
+        #if self.waypoints is None:
+        self.waypoints = msg
 
     def traffic_cb(self, msg):
         self.traffic_light_wp = msg.data
         rospy.loginfo("Traffic light detected: " + str(msg.data))
-        if self.traffic_light_wp > -1:
-            self.publish()
+        #if self.traffic_light_wp > -1:
+            #self.publish()
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -149,9 +150,9 @@ class WaypointUpdater(object):
             if traffic_light:
                 # stop close to red light 
                 distance = self.distance(wp.pose.pose.position, waypoints   [end_wp].pose.pose.position)
-                if self.current_velocity < 1.0 and distance < STOP_DISTANCE:
+                if distance < STOP_DISTANCE and self.current_velocity < 1.0:
                     wp.twist.twist.linear.x = 0.0
-                elif self.current_velocity < 1.0 and distance > STOP_DISTANCE:
+                elif distance > STOP_DISTANCE and self.current_velocity < 1.0:
                     wp.twist.twist.linear.x = 2.0
                 else:
                     wp.twist.twist.linear.x = min(self.current_velocity, waypoints[index].twist.twist.linear.x)
@@ -178,7 +179,7 @@ class WaypointUpdater(object):
         return final_wpts
     
     def publish(self):
-        if self.current_pose is not None:
+        if self.current_pose is not None and self.waypoints is not None:
             pose = self.current_pose
             wpts = self.waypoints.waypoints
             traffic_wpts = self.traffic_light_wp
