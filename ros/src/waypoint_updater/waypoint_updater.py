@@ -21,7 +21,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 #MAX_SPEED = 10 * 0.44704 # 1 mph = 0.44704 m/s, for site testing
-MAX_DEACCELERATION = 0.5
+MAX_DEACCELERATION = 1.0
 STOP_DISTANCE = 5.0
 
 class WaypointUpdater(object):
@@ -94,6 +94,10 @@ class WaypointUpdater(object):
         return math.sqrt(x*x + y*y + z*z)	
 		
     def decelerate(self, waypoints, tl_wp):
+    
+        if tl_wp > len(waypoints) or len(waypoints) < 1:
+            return []
+            
         last = waypoints[tl_wp]
         last.twist.twist.linear.x = 0.0
         for wp in waypoints[:tl_wp][::-1]:
@@ -149,7 +153,7 @@ class WaypointUpdater(object):
 
             if traffic_light:
                 # stop close to red light 
-                distance = self.distance(wp.pose.pose.position, waypoints   [end_wp].pose.pose.position)
+                distance = self.distance(wp.pose.pose.position, waypoints   [last_wp].pose.pose.position)
                 if distance < STOP_DISTANCE and self.current_velocity < 1.0:
                     wp.twist.twist.linear.x = 0.0
                 elif distance > STOP_DISTANCE and self.current_velocity < 1.0:
@@ -183,8 +187,11 @@ class WaypointUpdater(object):
             pose = self.current_pose
             wpts = self.waypoints.waypoints
             traffic_wpts = self.traffic_light_wp
+                
             lane = Lane()
             lane.header.frame_id = '/world'
+            
+            
 			
             next_wp = self.get_next_waypoint(pose.pose, wpts)
                         
