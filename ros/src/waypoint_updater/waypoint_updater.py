@@ -21,7 +21,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 #MAX_SPEED = 10 * 0.44704 # 1 mph = 0.44704 m/s, for site testing
-MAX_DEACCELERATION = 0.1
+MAX_DEACCELERATION = 0.5
 STOP_DISTANCE = 5.0
 
 class WaypointUpdater(object):
@@ -45,7 +45,7 @@ class WaypointUpdater(object):
         self.current_velocity = 0 
          
         #rospy.spin()
-        rate = rospy.Rate(20)
+        rate = rospy.Rate(10)
         while not rospy.is_shutdown():
             self.publish()
             rate.sleep()
@@ -187,7 +187,7 @@ class WaypointUpdater(object):
             lane.header.frame_id = '/world'
 			
             next_wp = self.get_next_waypoint(pose.pose, wpts)
-            
+                        
             #further_wps = self.waypoints.waypoints[next_wp:next_wp+LOOKAHEAD_WPS]
             #lane.waypoints = further_wps
 
@@ -200,6 +200,12 @@ class WaypointUpdater(object):
             else:
                 rospy.loginfo("traffic_light_wp > 0")
                 lane.waypoints = self.compute_final_waypoints(wpts, next_wp, traffic_wpts)
+                
+            posx = wpts[next_wp].pose.pose.position.x
+            posy = wpts[next_wp].pose.pose.position.y
+            rospy.loginfo("Nearest waypoint: idx=%d posx=%f posy=%f", next_wp, posx, posy)
+			
+            lane.header.stamp = rospy.Time().now()
 			
             self.final_waypoints_pub.publish(lane)
 
