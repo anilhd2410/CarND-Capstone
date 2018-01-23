@@ -208,9 +208,9 @@ class WaypointUpdater(object):
                 rospy.loginfo("traffic_light_wp > 0")
                 lane.waypoints = self.compute_final_waypoints(wpts, next_wp, traffic_wpts)
                 
-            posx = wpts[next_wp].pose.pose.position.x
-            posy = wpts[next_wp].pose.pose.position.y
-            rospy.loginfo("Nearest waypoint: idx=%d posx=%f posy=%f", next_wp, posx, posy)
+            #posx = wpts[next_wp].pose.pose.position.x
+            #posy = wpts[next_wp].pose.pose.position.y
+            #rospy.loginfo("Nearest waypoint: idx=%d posx=%f posy=%f", next_wp, posx, posy)
 			
             lane.header.stamp = rospy.Time().now()
 			
