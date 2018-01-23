@@ -77,5 +77,18 @@ class TLClassifier(object):
                 elif detected_class == 3:
                     return TrafficLight.RED
 
-            #rospy.loginfo('Traffic Light: {}'.format(self.traffic_light_to_str(output)))
+            rospy.loginfo('Traffic Light: {}'.format(self.traffic_light_to_str(output)))
             return TrafficLight.UNKNOWN
+    
+    def graph_class_to_traffic_light(graph_class):
+        """ Converts from a class number as defined in the TensorFlow
+            model, to a class number as defined in styx_msgs/TrafficLight
+        """
+        if graph_class == 1:
+            return TrafficLight.GREEN
+        elif graph_class == 2:
+            return TrafficLight.YELLOW
+        elif graph_class == 3:
+            return TrafficLight.RED
+
+        return TrafficLight.UNKNOWN
