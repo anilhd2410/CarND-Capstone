@@ -14,6 +14,7 @@ class LowPassFilter(object):
         if self.ready:
             val = self.a * val + self.b * self.last_val
         else:
+            val = 0 # start braking and accelerating smoothly from 0 position
             self.ready = True
 
         self.last_val = val

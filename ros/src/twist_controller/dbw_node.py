@@ -70,8 +70,6 @@ class DBWNode(object):
         self.desired_angular_velocity = 0
         self.desired_long_velocity = 0
 
-        rospy.logwarn("test log command")
-
         self.loop()
 
     def deceleration_to_Nm(self, desired_deceleration):
@@ -89,7 +87,6 @@ class DBWNode(object):
         # desired longitudinal velocity
         self.desired_long_velocity = twist_msg.twist.linear.x
 
-
     def dbw_enabled_callback(self, bool_msg):
         self.dbw_enabled = bool_msg.data
         rospy.logwarn('self.dbw_enabled = %d', self.dbw_enabled)
@@ -104,6 +101,9 @@ class DBWNode(object):
                 throttle, deceleration, steering = self.twist_controller.control(self.current_velocity,
                                                                           self.desired_long_velocity,
                                                                           self.desired_angular_velocity)
+
+                #rospy.logwarn('current_velocity: %f, desired_velocity: %f, throttle: %f, brake: %f',
+                #              self.current_velocity, self.desired_long_velocity, throttle, deceleration)
 
                 # throttle message
                 throttle_msg = ThrottleCmd()
