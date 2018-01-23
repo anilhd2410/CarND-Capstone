@@ -21,7 +21,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 
 LOOKAHEAD_WPS = 200 # Number of waypoints we will publish. You can change this number
 #MAX_SPEED = 10 * 0.44704 # 1 mph = 0.44704 m/s, for site testing
-MAX_DEACCELERATION = 1.0
+MAX_DEACCELERATION = 0.5
 STOP_DISTANCE = 5.0
 
 class WaypointUpdater(object):
@@ -95,7 +95,7 @@ class WaypointUpdater(object):
 		
     def decelerate(self, waypoints, tl_wp):
     
-        if tl_wp > len(waypoints) or len(waypoints) < 1:
+        if tl_wp >= len(waypoints) or len(waypoints) < 1:
             return []
             
         last = waypoints[tl_wp]
