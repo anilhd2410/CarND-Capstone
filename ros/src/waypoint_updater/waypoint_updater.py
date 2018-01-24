@@ -34,15 +34,13 @@ class WaypointUpdater(object):
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
         rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
         #rospy.Subscriber('/obstacle_waypoint', Lane, self.obstacle_cb)
-        rospy.Subscriber('/current_velocity', TwistStamped, self.current_vel_cb)
-
+       
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
 
         #Add other member variables you need below
         self.current_pose = None
         self.waypoints = None
         self.traffic_light_wp = None  
-        self.current_velocity = 0 
          
         #rospy.spin()
         rate = rospy.Rate(10)
@@ -151,17 +149,7 @@ class WaypointUpdater(object):
             wp.pose.pose.position.z  = waypoints[index].pose.pose.position.z
             wp.pose.pose.orientation = waypoints[index].pose.pose.orientation
 
-            if traffic_light:
-                # stop close to red light 
-                distance = self.distance(wp.pose.pose.position, waypoints   [last_wp].pose.pose.position)
-                if distance < STOP_DISTANCE and self.current_velocity < 1.0:
-                    wp.twist.twist.linear.x = 0.0
-                elif distance > STOP_DISTANCE and self.current_velocity < 1.0:
-                    wp.twist.twist.linear.x = 2.0
-                else:
-                    wp.twist.twist.linear.x = min(self.current_velocity, waypoints[index].twist.twist.linear.x)
-            else:
-                wp.twist.twist.linear.x = waypoints[index].twist.twist.linear.x 
+            wp.twist.twist.linear.x = waypoints[index].twist.twist.linear.x 
 
             final_wpts.append(wp)
 
