@@ -2,7 +2,7 @@
 | Member Name          | Project Responsibility  | E-mail Address             |
 | ---------------------|-------------------------|----------------------------|
 | Eliseo Miranda (Lead)| Traffic Light Detection | eliseo.l.miranda@gmail.com |
-| Anil Kumar           | WP/Motion Integration   | anilhd2410@gmail.com       |
+| Anil Kumar Honghalli Devaraju | WP/Motion Integration   | anilhd2410@gmail.com       |
 | Harvey Gomez         | Waypoint Publisher      | harvgo@gmail.com           |
 | Tobias Brunner       | Motion Control          | tobiausfeu@gmail.com       |
 | Arunabh Sharma       | Stop Line Publisher     | arunabh.1990@gmail.com     |
